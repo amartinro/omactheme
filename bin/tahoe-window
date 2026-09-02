@@ -1,0 +1,62 @@
+#!/bin/bash
+set -euo pipefail
+
+minimize() {
+  local address
+  address="$(hyprctl -j activewindow | jq -r '.address // empty')"
+  [[ -n "$address" ]] || exit 0
+  hyprctl dispatch movetoworkspacesilent special:tahoe-minimized,address:"$address"
+}
+
+restore_app() {
+  local app_id="${1:-}"
+  [[ -n "$app_id" ]] || exit 0
+  local address
+  address="$(hyprctl -j clients | jq -r --arg app "$app_id" '
+    map(select(.workspace.name == "special:tahoe-minimized"))
+    | map(select((.class | ascii_downcase) == ($app | ascii_downcase)
+      or (.initialClass | ascii_downcase) == ($app | ascii_downcase)))
+    | first.address // empty')"
+  [[ -n "$address" ]] || exit 1
+  hyprctl dispatch movetoworkspace current,address:"$address"
+  hyprctl dispatch focuswindow address:"$address"
+}
+
+# Toggle the active window between tiled and floating. When a tiled window
+# becomes floating, Hyprland would otherwise re-center and resize it, which
+# slides the titlebar and traffic-light buttons under the top bar. Capture the
+# tiled geometry first and, after floating, shrink the window a few percent
+# (centered on its tiled position) so the floating state is obvious at a glance
+# and the window is a touch easier to handle, while keeping the titlebar visible.
+float_toggle() {
+  local aw address floating x y w h
+  aw="$(hyprctl -j activewindow)" || exit 0
+  address="$(echo "$aw" | jq -r '.address // empty')"
+  [[ -n "$address" ]] || exit 0
+  floating="$(echo "$aw" | jq -r '.floating')"
+  x="$(echo "$aw" | jq '.at[0]')"
+  y="$(echo "$aw" | jq '.at[1]')"
+  w="$(echo "$aw" | jq '.size[0]')"
+  h="$(echo "$aw" | jq '.size[1]')"
+
+  if [[ "$floating" == "false" ]]; then
+    hyprctl dispatch 'hl.dsp.window.float({ action = "on" })'
+    # Shrink by 5% (proportional) and keep centered on the tiled position.
+    local fw fh fx fy
+    fw=$(( w * 95 / 100 ))
+    fh=$(( h * 95 / 100 ))
+    fx=$(( x + (w - fw) / 2 ))
+    fy=$(( y + (h - fh) / 2 ))
+    hyprctl dispatch "hl.dsp.window.resize({ x = $fw, y = $fh })"
+    hyprctl dispatch "hl.dsp.window.move({ x = $fx, y = $fy })"
+  else
+    hyprctl dispatch 'hl.dsp.window.float({ action = "off" })'
+  fi
+}
+
+case "${1:-}" in
+  minimize) minimize ;;
+  restore-app) restore_app "${2:-}" ;;
+  float-toggle) float_toggle ;;
+  *) echo "Usage: tahoe-window minimize | restore-app <app-id> | float-toggle" >&2; exit 2 ;;
+esac
