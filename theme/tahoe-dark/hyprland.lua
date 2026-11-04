@@ -44,12 +44,11 @@ local P = {
   -- keeps the window's own footprint; a 3% shrink pulls it under the frame on
   -- wide windows and the halo disappears.
   --
-  -- The wallpaper is near-black, and a black shadow on it only reaches about
-  -- 15/255 in the gaps, which is too faint to read. The tinted variant uses
-  -- the accent amber and lands around 250 fading to 160 over the same reach,
-  -- so the lifted layer is obvious at a glance.
+  -- The shadow stays a neutral black on both states, matching the Tahoe glass
+  -- planes. On the near-black wallpaper it reads as a low-contrast but
+  -- continuous falloff; the colored accent rim carries the focus instead.
   shadow = {
-    tinted = true,
+    tinted = false,
     tint = "rgba(ff9f0a8c)",
     neutral = "rgba(000000b3)",
     color_inactive = "rgba(00000080)",
