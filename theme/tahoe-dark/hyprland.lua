@@ -37,20 +37,26 @@ local P = {
   fullscreen_opacity = 1.0,
 
   -- ── Drop shadow ───────────────────────────────────────────────────────
-  -- The frame's soft edge. `tinted = false` keeps the neutral black drop
-  -- shadow; `true` paints it with the accent so the focused window also gets a
-  -- faint halo. Geometry is shared by both. `range` = reach in px, `power` =
-  -- falloff steepness (higher = tighter), `offset` = {x, y} push, `scale` =
-  -- shrink of the shadow versus the window.
+  -- Geometry: `range` = reach in px, `power` = falloff steepness (higher =
+  -- tighter), `offset` = {x, y} push, `scale` = shrink of the shadow versus
+  -- the window. Power 2 rather than 3: a higher power collapses the gradient
+  -- so fast the halo reads as a hard line. Scale stays at 1.0 so the shadow
+  -- keeps the window's own footprint; a 3% shrink pulls it under the frame on
+  -- wide windows and the halo disappears.
+  --
+  -- The wallpaper is near-black, and a black shadow on it only reaches about
+  -- 15/255 in the gaps, which is too faint to read. The tinted variant uses
+  -- the accent amber and lands around 250 fading to 160 over the same reach,
+  -- so the lifted layer is obvious at a glance.
   shadow = {
-    tinted = false,
-    tint = "rgba(ff9f0a59)",
-    neutral = "rgba(00000078)",
-    color_inactive = "rgba(00000042)",
-    range = 34,
-    power = 3,
-    offset = { 0, 8 },
-    scale = 0.97,
+    tinted = true,
+    tint = "rgba(ff9f0a8c)",
+    neutral = "rgba(000000b3)",
+    color_inactive = "rgba(00000080)",
+    range = 42,
+    power = 2,
+    offset = { 0, 10 },
+    scale = 1.0,
   },
 
   -- ── Glass blur ────────────────────────────────────────────────────────
