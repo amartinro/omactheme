@@ -198,6 +198,12 @@ hl.layer_rule({ match = { namespace = "local-dock" }, blur = true, blur_popups =
 -- Fullscreen content should have no visible frame or titlebar.
 hl.window_rule({ match = { fullscreen = true }, border_size = 0, rounding = 0 })
 
+-- macOS-style elevation: the tiled plane stays flat and only the floating
+-- layer casts the drop shadow, so a floated window reads as lifted above the
+-- rest. Declare the flat base first; the later rule wins for floaters.
+hl.window_rule({ match = { class = ".*" }, no_shadow = true })
+hl.window_rule({ match = { float = true }, no_shadow = false })
+
 -- hyprbars renders buttons left-to-right in declaration order when aligned
 -- left, so declare them in the macOS traffic-light order: red (close),
 -- yellow (float), green (maximize).

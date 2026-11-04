@@ -9,6 +9,9 @@ window between floating and tiled, and green toggles maximize. Double-clicking
 a titlebar also toggles maximize. The dock magnifies on hover, uses a translucent
 glass surface, and keeps running-app indicators.
 
+Tiled windows sit flat; only the floating window casts the soft drop shadow, so
+a floated window reads as lifted above the plane.
+
 Notification popups get a macOS-style close control: hovering a card reveals a
 small circled `x` in its top-left corner, and clicking it dismisses that card
 only. The installer clones the shell's notification plugin into
