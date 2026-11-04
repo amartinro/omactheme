@@ -25,9 +25,27 @@ restore_path "hooks/80-tahoe-dark" "$HOME/.config/omarchy/hooks/theme-set.d/80-t
 restore_path "hypr/tahoe-overrides.lua" "$HOME/.config/hypr/tahoe-overrides.lua"
 restore_path "hypr/hyprland.lua" "$HOME/.config/hypr/hyprland.lua"
 
+# The notification close button lives in a plugin clone this installer created.
+# Only remove it when this backup records the clone, so a clone the user made
+# themselves survives.
+shell_restart=0
+if [[ -f "$BACKUP/notification-clone" ]]; then
+  notif_id="$(<"$BACKUP/notification-clone")"
+  if [[ -d "$HOME/.config/omarchy/plugins/$notif_id" ]]; then
+    omarchy plugin remove "$notif_id" --yes
+    shell_restart=1
+  fi
+  rm -f "$STATE_DIR/notification-clone"
+fi
+
 hyprpm disable hyprbars >/dev/null 2>&1 || true
 previous="$(<"$BACKUP/previous-theme")"
 if [[ -n "$previous" ]]; then omarchy theme set "$previous"; fi
 hyprctl reload
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+if (( shell_restart )); then
+  # Restoring the built-in needs a fresh service instance; hot reload does
+  # not rebuild services.
+  omarchy restart shell >/dev/null 2>&1 || true
+fi
 echo "Tahoe Dark removed; restored $BACKUP"

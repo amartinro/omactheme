@@ -46,6 +46,22 @@ install -m 0755 "$ROOT/bin/tahoe-window" "$HOME/.local/bin/tahoe-window"
 install -m 0755 "$ROOT/hooks/theme-set" "$HOOK_DEST"
 install -m 0644 "$ROOT/config/tahoe-overrides.lua" "$HOME/.config/hypr/tahoe-overrides.lua"
 
+NOTIF_PLUGIN="$HOME/.config/omarchy/plugins/${USER:-$(id -un)}.notifications"
+NOTIF_CARD="$NOTIF_PLUGIN/components/NotificationCard.qml"
+if [[ -e $NOTIF_PLUGIN ]]; then
+  printf 'Notifications plugin already cloned; leaving %s alone.\n' "$NOTIF_PLUGIN" >&2
+else
+  omarchy plugin clone omarchy.notifications
+  printf '%s\n' "${USER:-$(id -un)}.notifications" > "$BACKUP/notification-clone"
+fi
+card_before="$(md5sum "$NOTIF_CARD" | cut -d' ' -f1)"
+python3 "$ROOT/notifications/close-button.py" "$NOTIF_CARD"
+card_after="$(md5sum "$NOTIF_CARD" | cut -d' ' -f1)"
+# The shell builds each plugin's service once; saving the patched card does not
+# rebuild it, so the close button only appears after a shell restart.
+shell_restart=0
+[[ $card_before == "$card_after" ]] || shell_restart=1
+
 if ! grep -q 'require("hypr.tahoe-overrides")' "$HOME/.config/hypr/hyprland.lua"; then
   printf '\n-- Tahoe Dark post-user look overrides (installed by omactheme).\nrequire("hypr.tahoe-overrides")\n' \
     >> "$HOME/.config/hypr/hyprland.lua"
@@ -69,4 +85,7 @@ fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 omarchy-dock reload >/dev/null 2>&1 || true
+if (( shell_restart )); then
+  omarchy restart shell >/dev/null 2>&1 || true
+fi
 printf 'Tahoe Dark installed. Backup: %s\n' "$BACKUP"

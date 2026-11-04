@@ -7,8 +7,10 @@ if file then file:close() end
 if theme == "tahoe-dark" then
   hl.config({
     decoration = {
+      -- Matches the `P` table in theme/tahoe-dark/hyprland.lua; keep both in step.
+      -- On Hyprland 0.55+ 1.0 is a triangular chamfer, 2.0 is a true circle.
       rounding = 18,
-      rounding_power = 3.0,
+      rounding_power = 2.0,
     },
   })
 end
