@@ -30,6 +30,7 @@ printf '%s\n' "$previous_theme" > "$BACKUP/previous-theme"
 backup_path "$THEME_DEST" "theme"
 backup_path "$DOCK_DEST" "dock"
 backup_path "$HOME/.local/bin/tahoe-window" "bin/tahoe-window"
+backup_path "$HOME/.local/bin/omarchy-dock" "bin/omarchy-dock"
 backup_path "$HOOK_DEST" "hooks/80-tahoe-dark"
 backup_path "$HOME/.config/hypr/tahoe-overrides.lua" "hypr/tahoe-overrides.lua"
 backup_path "$HOME/.config/hypr/hyprland.lua" "hypr/hyprland.lua"
@@ -43,6 +44,7 @@ mkdir -p "$DOCK_DEST"
 cp -a "$ROOT/dock/." "$DOCK_DEST/"
 
 install -m 0755 "$ROOT/bin/tahoe-window" "$HOME/.local/bin/tahoe-window"
+install -m 0755 "$ROOT/bin/omarchy-dock" "$HOME/.local/bin/omarchy-dock"
 install -m 0755 "$ROOT/hooks/theme-set" "$HOOK_DEST"
 install -m 0644 "$ROOT/config/tahoe-overrides.lua" "$HOME/.config/hypr/tahoe-overrides.lua"
 
@@ -84,7 +86,7 @@ if [[ -n "${errors//[[:space:]]/}" ]]; then
 fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
-omarchy-dock reload >/dev/null 2>&1 || true
+"$HOME/.local/bin/omarchy-dock" reload >/dev/null 2>&1 || true
 if (( shell_restart )); then
   omarchy restart shell >/dev/null 2>&1 || true
 fi

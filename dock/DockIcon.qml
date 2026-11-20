@@ -24,7 +24,8 @@ Item {
   // Animated scale factor (a Behavior can only live on the item itself, not
   // inside the transform list).
   property real dragScale: 1.0
-  property real hoverScale: tahoeMode && iconHover.hovered ? 1.34 : 1.0
+  property real hoverScale: tahoeMode && iconHover.hovered ? 1.24 : 1.0
+  readonly property bool hovered: iconHover.hovered
   property real launchLift: 0
   readonly property real visualScale: root.dragScale * root.hoverScale
   onIsDraggedChanged: root.dragScale = root.isDragged ? 1.12 : 1.0
@@ -110,29 +111,6 @@ Item {
     NumberAnimation { target: root; property: "launchLift"; to: 0; duration: 180; easing.type: Easing.OutBounce }
   }
 
-  Rectangle {
-    id: tooltip
-    visible: root.tahoeMode && iconHover.hovered && !root.isDragged && root.label.length > 0
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.bottom: parent.top
-    anchors.bottomMargin: 12
-    width: tooltipText.implicitWidth + 18
-    height: 27
-    radius: 8
-    color: "#292B32E8"
-    border.width: 1
-    border.color: "#FFFFFF24"
-    z: 30
-    Text {
-      id: tooltipText
-      anchors.centerIn: parent
-      text: root.label
-      color: "#F7F7FA"
-      font.family: "Sans"
-      font.pixelSize: 12
-      font.weight: Font.Medium
-    }
-  }
 
   // File drop target: dropping a file on the icon opens it with this app.
   DropArea {

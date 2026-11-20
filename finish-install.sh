@@ -16,5 +16,5 @@ if [[ -n "${errors//[[:space:]]/}" ]]; then
 fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
-omarchy-dock reload >/dev/null 2>&1 || true
+"$HOME/.local/bin/omarchy-dock" reload >/dev/null 2>&1 || true
 echo "Tahoe Dark is active"

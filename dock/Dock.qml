@@ -38,7 +38,7 @@ Item {
   readonly property bool tahoeMode: activeThemeName.trim() === "tahoe-dark"
 
   function loadThemeName() {
-    try { root.activeThemeName = String(themeNameFile.text || "").trim() }
+    try { root.activeThemeName = String(themeNameFile.text() || "").trim() }
     catch (e) { root.activeThemeName = "" }
   }
 
@@ -123,18 +123,18 @@ Item {
   
 
   // ------------------------------------------------------------------ geometry
-  readonly property real iconSize: tahoeMode ? 48 : Style.space(40)
-  readonly property real cellPad: tahoeMode ? 7 : Style.space(5)
+  readonly property real iconSize: tahoeMode ? 40 : Style.space(40)
+  readonly property real cellPad: tahoeMode ? 6 : Style.space(5)
   readonly property real rowGap: tahoeMode ? 2 : Style.space(4)
-  readonly property real cardPad: tahoeMode ? 8 : Style.space(10)
-  readonly property real edgeGap: tahoeMode ? 10 : Style.space(8)
-  readonly property real dotSize: tahoeMode ? 4 : Style.space(4)
+  readonly property real cardPad: tahoeMode ? 7 : Style.space(10)
+  readonly property real edgeGap: tahoeMode ? 8 : Style.space(8)
+  readonly property real dotSize: tahoeMode ? 3 : Style.space(4)
 
   // Border/radius mirror Hyprland's window decoration (focused window border
   // size and window rounding), read from the hyprland look'n'feel files.
   property real hyprBorderWidth: 2
   property int hyprRounding: 8
-  readonly property int cardRadius: root.tahoeMode ? 20 : root.hyprRounding
+  readonly property int cardRadius: root.tahoeMode ? 16 : root.hyprRounding
 
   function parseHyprInt(text, key) {
     if (!text) return -1
@@ -152,12 +152,12 @@ Item {
     var border = 2
     var rounding = 8
     try {
-      var t = hyprDefaultLook.text
+      var t = hyprDefaultLook.text()
       var b = root.parseHyprInt(t, "border_size"); if (b >= 0) border = b
       var r = root.parseHyprInt(t, "rounding"); if (r >= 0) rounding = r
     } catch (e) { }
     try {
-      var u = hyprUserLook.text
+      var u = hyprUserLook.text()
       var b2 = root.parseHyprInt(u, "border_size"); if (b2 >= 0) border = b2
       var r2 = root.parseHyprInt(u, "rounding"); if (r2 >= 0) rounding = r2
     } catch (e) { }
@@ -398,10 +398,13 @@ Item {
 
   // Config mutations go through the CLI so dock.json stays the single source
   // of truth; FileView's watchChanges reloads the list after each write.
+  // The path is absolute on purpose: the first omarchy-dock on PATH is the
+  // shell.json-backed native one, which ignores dock.json entirely.
+  readonly property string cliPath: Quickshell.env("HOME") + "/.local/bin/omarchy-dock"
   function dockCli(args) {
-    var cmd = ["omarchy-dock"]
+    var cmd = [root.cliPath]
     for (var i = 0; i < args.length; i++) cmd.push(String(args[i]))
-    Quickshell.execDetached(cmd)
+    try { Quickshell.execDetached(cmd) } catch (e) { }
   }
 
   function addEntry(desktopId) { root.dockCli(["add", desktopId]) }
@@ -471,12 +474,12 @@ property var draggingItem: null
     var maxLeft = (count - 1) * cell
     if (leftEdge < 0) leftEdge = 0
     if (leftEdge > maxLeft) leftEdge = maxLeft
-    root.draggingItem.dragOffsetX = leftEdge - root.dragFromIndex * cell
-    // Vertical follow: the icon's center tracks the pointer, so it visibly
-    // lifts toward the edge it is being dragged to. The offset is computed
-    // from the layout center measured at drag start (not mapFromItem, which
-    // would include the transform and oscillate). Clamped so the icon stays
-    // fully inside the window.
+    // Snap the dragged icon to the slot it will land in (discrete, matches the
+    // indicator), and track the pointer vertically so the lift reads clearly.
+    var target = Math.round(leftEdge / cell)
+    if (target < 0) target = 0
+    if (target > count - 1) target = count - 1
+    root.draggingItem.dragOffsetX = target * cell - root.dragFromIndex * cell
     if (winY !== undefined && !isNaN(Number(winY))) {
       var offY = Number(winY) - root.dragLayoutCenterY
       var limit = Number(root.cardPad) || 10
@@ -484,12 +487,8 @@ property var draggingItem: null
       if (offY > limit) offY = limit
       root.draggingItem.dragOffsetY = offY
     }
-    var target = Math.round(leftEdge / cell)
-    if (target < 0) target = 0
-    if (target > count - 1) target = count - 1
     if (target !== root.dragIndex) root.dragIndex = target
   }
-
   function endDrag(rowX) {
     if (root.draggingItem === null) return
     root.dragHover(rowX)
@@ -539,20 +538,36 @@ property var draggingItem: null
   property var menuEntry: null
   property bool menuIsRunning: false
   property real menuAnchorX: 0
+  property real menuAnchorY: 0
   property bool pickerOpen: false
-  property string pickerQuery: ""
+  property string tooltipLabel: ""
+  property real tooltipAnchorX: 0
+  property bool tooltipOpen: false
 
-  function openMenu(entry, anchorX) {
+  function showTooltip(item, label) {
+    if (!root.tahoeMode || !item || label.length === 0) { root.tooltipOpen = false; return }
+    var point = dockWindow.contentItem.mapFromItem(item, item.width / 2, 0)
+    root.tooltipAnchorX = point.x
+    root.tooltipLabel = label
+    root.tooltipOpen = true
+  }
+  function hideTooltip() { root.tooltipOpen = false }
+
+  // anchorX/anchorY are the icon's centre-x / top-y in dock-window
+  // coordinates, taken with Item.mapFromItem at press time.
+  function openMenu(entry, anchorX, anchorY) {
     root.menuEntry = entry
     root.menuIsRunning = false
     root.menuAnchorX = anchorX
+    root.menuAnchorY = anchorY
     root.pickerOpen = false
     root.menuOpen = true
   }
-  function openRunningMenu(app, anchorX) {
+  function openRunningMenu(app, anchorX, anchorY) {
     root.menuEntry = app
     root.menuIsRunning = true
     root.menuAnchorX = anchorX
+    root.menuAnchorY = anchorY
     root.pickerOpen = false
     root.menuOpen = true
   }
@@ -614,7 +629,9 @@ property var draggingItem: null
       right: 0
     }
     implicitWidth: 0
-    implicitHeight: root.cardHeight + (root.tahoeMode ? 42 : 0)
+    // The card is the only thing inside the surface: the tooltip and the
+    // menus are separate popup surfaces, so no extra band is reserved.
+    implicitHeight: root.cardHeight
 
     ScreenMoveRemap {
       id: remapGuard
@@ -646,23 +663,13 @@ property var draggingItem: null
       anchors.bottom: parent.bottom
       width: root.cardWidth
       height: root.cardHeight
-      color: root.tahoeMode ? "#24262DC7" : Color.popups.background
+      color: root.tahoeMode ? "#C724262D" : Color.popups.background
       borderSpec: Border.localOrSurfaceSpec("popups", "border",
-        root.tahoeMode ? "#FFFFFF2B" : Color.popups.border,
-        root.tahoeMode ? "#FFFFFF2B" : Color.popups.border,
+        root.tahoeMode ? "#2BFFFFFF" : Color.popups.border,
+        root.tahoeMode ? "#2BFFFFFF" : Color.popups.border,
         root.tahoeMode ? 1 : root.hyprBorderWidth)
       radius: root.cardRadius
 
-      Rectangle {
-        visible: root.tahoeMode
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: 1
-        height: 1
-        radius: 1
-        color: "#FFFFFF30"
-      }
 
       Row {
         id: iconRow
@@ -687,10 +694,12 @@ property var draggingItem: null
             draggable: true
             row: iconRow
             isDragged: root.draggingItem === dockIcon
+            onHoveredChanged: hovered && !isDragged
+              ? root.showTooltip(dockIcon, label) : root.hideTooltip()
             onLaunch: root.launchOrFocus(modelData)
             onRequestMenu: {
               var point = dockWindow.contentItem.mapFromItem(dockIcon, dockIcon.width / 2, 0)
-              root.openMenu(modelData, point.x)
+              root.openMenu(modelData, point.x, point.y)
             }
             onDragStartX: function(x) { root.startDrag(dockIcon, x) }
             onDragMove: function(rowX, winY) { root.dragHover(rowX, winY) }
@@ -724,14 +733,83 @@ property var draggingItem: null
             radius: root.cardRadius
             tahoeMode: root.tahoeMode
             label: String(modelData.name || modelData.appId || "")
+            onHoveredChanged: hovered
+              ? root.showTooltip(runningIcon, label) : root.hideTooltip()
             onLaunch: root.focusApp(modelData)
             onRequestMenu: {
               var point = dockWindow.contentItem.mapFromItem(runningIcon, runningIcon.width / 2, 0)
-              root.openRunningMenu(modelData, point.x)
+              root.openRunningMenu(modelData, point.x, point.y)
             }
             onDropFiles: function(urls) { root.openFilesWith(modelData, urls) }
           }
         }
+      }
+
+      // Drop-slot hint: the pill sits under the slot the dragged icon snaps
+      // to, so the target position is readable while the pointer moves.
+      Rectangle {
+        id: dropSlotHint
+        visible: root.draggingItem !== null && root.dragIndex >= 0
+        x: iconRow.x + root.dragIndex * (root.cellSize + root.rowGap)
+          + (root.cellSize - root.iconSize) / 2
+        y: iconRow.y + iconRow.height + 2
+        width: root.iconSize
+        height: 3
+        radius: 1.5
+        color: "#80FFFFFF"
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ icon tooltip
+  // Its own surface so the dock panel can stay exactly as tall as the card.
+  PopupWindow {
+    id: tooltipWindow
+
+    visible: root.tooltipOpen
+    color: "transparent"
+    implicitWidth: tooltipCard.implicitWidth
+    implicitHeight: tooltipCard.implicitHeight
+
+    anchor {
+      id: tooltipAnchor
+      window: dockWindow
+      adjustment: PopupAdjustment.Slide
+      edges: Edges.Top | Edges.Left
+      gravity: Edges.Bottom | Edges.Right
+      rect.width: 1
+      rect.height: 1
+
+      onAnchoring: {
+        if (!root.tooltipOpen) return
+        var popupWidth = tooltipWindow.implicitWidth
+        var popupHeight = tooltipWindow.implicitHeight
+        var localX = root.tooltipAnchorX - popupWidth / 2
+        localX = Math.max(4, Math.min(localX, dockWindow.width - popupWidth - 4))
+        tooltipAnchor.rect.x = Math.round(localX)
+        tooltipAnchor.rect.y = Math.round(-popupHeight - 6)
+      }
+    }
+
+    Rectangle {
+      id: tooltipCard
+      width: tooltipLabel1.implicitWidth + 16
+      height: 22
+      radius: 7
+      color: "#E8292B32"
+      border.width: 1
+      border.color: "#24FFFFFF"
+      implicitWidth: width
+      implicitHeight: height
+
+      Text {
+        id: tooltipLabel1
+        anchors.centerIn: parent
+        text: root.tooltipLabel
+        color: "#F7F7FA"
+        font.family: "Sans"
+        font.pixelSize: 11
+        font.weight: Font.Medium
       }
     }
   }
@@ -749,18 +827,21 @@ property var draggingItem: null
       id: menuAnchor
       window: dockWindow
       adjustment: PopupAdjustment.Slide
-      edges: Edges.Bottom | Edges.Left
-      gravity: Edges.Top | Edges.Right
+      edges: Edges.Top | Edges.Left
+      gravity: Edges.Bottom | Edges.Right
       rect.width: 1
       rect.height: 1
 
+      // The popup's top-left corner lands on the anchor point, so the rect is
+      // that corner: centred on the icon in X, sitting just above it in Y.
       onAnchoring: {
         if (!root.menuOpen) return
         var popupWidth = menuWindow.implicitWidth
         var popupHeight = menuWindow.implicitHeight
         var localX = root.menuAnchorX - popupWidth / 2
         localX = Math.max(4, Math.min(localX, dockWindow.width - popupWidth - 4))
-        var localY = -popupHeight - 8
+        var localY = root.menuAnchorY - popupHeight - 6
+        if (localY < 0) localY = root.menuAnchorY + root.cellSize + 6
         menuAnchor.rect.x = Math.round(localX)
         menuAnchor.rect.y = Math.round(localY)
       }
@@ -908,17 +989,18 @@ property var draggingItem: null
       id: pickerAnchor
       window: dockWindow
       adjustment: PopupAdjustment.Slide
-      edges: Edges.Bottom | Edges.Left
-      gravity: Edges.Top | Edges.Right
+      edges: Edges.Top | Edges.Left
+      gravity: Edges.Bottom | Edges.Right
       rect.width: 1
       rect.height: 1
 
+      // Top-left corner of the popup lands on the anchor point.
       onAnchoring: {
         if (!root.pickerOpen) return
         var popupWidth = pickerWindow.implicitWidth
         var popupHeight = pickerWindow.implicitHeight
         var localX = dockWindow.width / 2 - popupWidth / 2
-        var localY = -popupHeight - 8
+        var localY = -popupHeight - 6
         pickerAnchor.rect.x = Math.round(localX)
         pickerAnchor.rect.y = Math.round(localY)
       }

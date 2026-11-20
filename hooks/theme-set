@@ -9,4 +9,4 @@ else
 fi
 
 hyprctl reload >/dev/null 2>&1 || true
-omarchy-dock reload >/dev/null 2>&1 || true
+[[ -x "$HOME/.local/bin/omarchy-dock" ]] && "$HOME/.local/bin/omarchy-dock" reload >/dev/null 2>&1 || true
