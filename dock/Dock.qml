@@ -86,6 +86,9 @@ Item {
     for (var k = 0; k < next.length; k++) now += JSON.stringify(next[k]) + "\u0001"
     if (prev === now) return
     root.entries = next
+    root.cacheCandidates()
+    root.pickerCache = null
+    root.runningSignature = ""
     root.refreshRunning()
     root.loadHyprLook()
   }
@@ -213,26 +216,37 @@ Item {
   // Stable order: existing apps keep their slot, new ones append, closed ones drop.
   property var runningApps: []
 
-  function entryCandidates(entry) {
+  // Candidate strings per entry, computed once per config load (parallel to
+  // root.entries) so the per-toplevel matching does no allocation.
+  property var candidateCache: []
+
+  function cacheCandidates() {
     var out = []
-    var id = String(entry.id || "").toLowerCase().replace(/\.desktop$/, "")
-    if (id.length >= 2) out.push(id)
-    var ic = String(entry.icon || "").toLowerCase()
-    if (ic.length >= 2) out.push(ic)
-    var match = entry.match
-    if (Array.isArray(match)) {
-      for (var i = 0; i < match.length; i++) {
-        var m = String(match[i]).toLowerCase()
-        if (m.length >= 2) out.push(m)
+    var entries = root.entries
+    for (var e = 0; e < entries.length; e++) {
+      var entry = entries[e]
+      var cands = []
+      var id = String(entry.id || "").toLowerCase().replace(/\.desktop$/, "")
+      if (id.length >= 2) cands.push(id)
+      var ic = String(entry.icon || "").toLowerCase()
+      if (ic.length >= 2) cands.push(ic)
+      var match = entry.match
+      if (Array.isArray(match)) {
+        for (var i = 0; i < match.length; i++) {
+          var m = String(match[i]).toLowerCase()
+          if (m.length >= 2) cands.push(m)
+        }
       }
+      out.push(cands)
     }
-    return out
+    root.candidateCache = out
   }
 
-  function matchesAppId(entry, appId) {
-    var app = String(appId || "").toLowerCase()
-    if (app.length < 2) return false
-    var cands = root.entryCandidates(entry)
+  // Indexed form of the old matchesAppId(): same comparison, no per-call
+  // candidate rebuild. `app` must already be lowercased.
+  function matchAt(index, app) {
+    var cands = root.candidateCache[index]
+    if (!cands) return false
     for (var i = 0; i < cands.length; i++) {
       var cand = cands[i]
       if (app === cand) return true
@@ -261,9 +275,19 @@ Item {
   }
 
   // {runningKeys, runningApps} for the current window set.
+  // Skips the rebuild when the window set is identical (focus changes fire
+  // onActiveToplevelChanged and onValuesChanged for the same state).
+  property string runningSignature: ""
+
   function refreshRunning() {
     var entries = root.entries
     var toplevels = root.toplevelList()
+
+    var signature = ""
+    for (var s = 0; s < toplevels.length; s++)
+      signature += String(toplevels[s].appId || "") + "\u0002" + String(toplevels[s].title || "") + "\u0001"
+    if (signature === root.runningSignature) return
+    root.runningSignature = signature
 
     var keys = {}
     var groups = {}      // appId -> {title, toplevels:[]}
@@ -272,11 +296,12 @@ Item {
       var toplevel = toplevels[t]
       var appId = String(toplevel.appId || "")
       if (appId.length < 2) continue
-      var pinnedHit = ""
+      var app = appId.toLowerCase()
+      var pinnedHit = false
       for (var e = 0; e < entries.length; e++) {
-        if (root.matchesAppId(entries[e], appId)) {
+        if (root.matchAt(e, app)) {
           keys[String(entries[e].id)] = true
-          pinnedHit = String(entries[e].id)
+          pinnedHit = true
           break
         }
       }
@@ -381,8 +406,10 @@ Item {
     var id = String(entry.id || "")
     if (!id) return
     var toplevels = root.toplevelList()
+    var index = root.entries.indexOf(entry)
     for (var t = 0; t < toplevels.length; t++) {
-      if (root.matchesAppId(entry, String(toplevels[t].appId || ""))) {
+      var app = String(toplevels[t].appId || "").toLowerCase()
+      if (index >= 0 && root.matchAt(index, app)) {
         if (root.tahoeMode) Quickshell.execDetached(["tahoe-window", "restore-app", String(toplevels[t].appId || "")])
         try { toplevels[t].activate() } catch (e) { }
         return
@@ -589,7 +616,7 @@ property var draggingItem: null
     for (var d = 0; d < entries.length; d++) inDock[String(entries[d].id)] = true
     var values = []
     try { values = DesktopEntries.applications.values || [] } catch (e) { return rows }
-    var query = root.pickerQuery.trim().toLowerCase()
+    var query = String(root.pickerQuery || "").trim().toLowerCase()
     for (var i = 0; i < values.length; i++) {
       var entry = values[i]
       var id = String(entry.id || "")
@@ -632,26 +659,26 @@ property var draggingItem: null
     // The card is the only thing inside the surface: the tooltip and the
     // menus are separate popup surfaces, so no extra band is reserved.
     implicitHeight: root.cardHeight
+    // Only the card is drawn, so only the card takes pointer events; the
+    // transparent margins fall through to the windows behind.
+    mask: Region {
+      x: dockCard.x; y: dockCard.y
+      width: dockCard.width; height: dockCard.height
+    }
 
     ScreenMoveRemap {
       id: remapGuard
       window: dockWindow
     }
 
-    // Right click on empty dock area: open the add-app picker.
-    MouseArea {
-      anchors.fill: parent
-      acceptedButtons: Qt.RightButton
-      onClicked: function(mouse) { root.openPicker() }
-    }
-
-    // If the pointer leaves the whole window mid-drag, the compositor stops
-    // delivering motion and the release may never arrive: finalize the drop
-    // at the last known slot so the icon can't get stuck in drag state.
+    // One input area for the strip: right click opens the add-app picker, and
+    // a pointer exit mid-drag finalizes the drop at the last known slot (the
+    // compositor stops delivering motion once outside the window).
     MouseArea {
       anchors.fill: parent
       hoverEnabled: true
-      acceptedButtons: Qt.NoButton
+      acceptedButtons: Qt.RightButton
+      onClicked: function(mouse) { root.openPicker() }
       onExited: {
         if (root.draggingItem !== null) root.dropOutsideDrag()
       }
